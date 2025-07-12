@@ -219,7 +219,7 @@ def extract_article_content(soup: BeautifulSoup) -> Dict[str, str]:
         date_elem = soup.find('meta', attrs={'name': selector})
         if date_elem and date_elem.get('content'):
             date = date_elem.get('content')
-            date = re.compile('\d{4}-\d{2}-\d{2}').findall(date)
+            date = re.compile(r'\d{4}-\d{2}-\d{2}').findall(date)
             if date:
                 article_data['date'] = date[0]
                 break
