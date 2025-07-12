@@ -35,7 +35,13 @@ TOPICS = ['',
           '/us-news/',
           '/news/',
           '/tech/',
-          '/world/']
+          '/world/',
+          '/market-data/',
+          '/news/business/',
+          '/news/latest/',
+          '/news/markets/',
+          '/news/tech/',
+          '/news/us/']
 
 EXCLUDE_PATTERNS = ['signin', 'login', 'subscri', 'member', 'footer', 'about', 'contact', 'privacy', 'terms', 'help',
                     'video', 'podcast', 'audio', '-worship', 'architecture', 'lifestyle', 'fashion', 'on-the-clock',
@@ -43,7 +49,8 @@ EXCLUDE_PATTERNS = ['signin', 'login', 'subscri', 'member', 'footer', 'about', '
                     'obituar', 'wine', 'film-review', 'book-review', 'television-review', 'arts', 'art', '-review',
                     'bookshelf', 'play.google', 'apple.com/us/app', 'policy/legal-policies', 'djreprints', 'register',
                     'wsj.jobs', 'smartmoney', 'classifieds', 'cultural', 'masterpiece', 'puzzle', 'personal-finance',
-                    'style', 'customercenter', 'snapchat', 'cookie-notice', 'facebook', 'instagram',
+                    'style', 'customercenter', 'snapchat', 'cookie-notice', 'facebook', 'instagram', 'twitter',
+                    '/policy/copyright-policy', '/policy/data-policy',
                     'accessibility-statement', 'press-room', 'mansionglobal', 'images', 'mailto', 'youtube', '#']
 
 
@@ -478,11 +485,10 @@ class WSJAdapter:
 if __name__ == "__main__":
     # Test with a smaller date range and fewer workers
     wb = WSJAdapter(
-        url="www.wsj.com",
         latest_records=True,
         latest_articles=True,
-        start_date=datetime.date(2025, 6, 1),
-        end_date=datetime.date(2025, 6, 10),  # Just one day
+        start_date=datetime.date(2020, 1, 1),
+        end_date=datetime.date(2020, 1, 31),  # Just one day
         max_workers=10  # Reduced workers
     )
 
