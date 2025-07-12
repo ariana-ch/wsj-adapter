@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wsj-adapter"
+version = "0.0.1"
+authors = [
+  { name="Ariana Christodoulou", email="ariana.chr@gmail.com" },
+]
+description = "A package to download articles from the Wall Street Journal via the Wayback Machine."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content :: News/Diary",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+license = "MIT"
+license-files = ["LICENCE*"]
+keywords = ["wsj", "news articles", "wayback machine", "web scraping", "financial data"]
+dependencies = [
+    "beautifulsoup4>=4.12.0",
+    "pandas>=1.5.0",
+    "requests>=2.28.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "coverage>=7.0.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "coverage>=7.0.0",
+]
+docs = [
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ariana-ch/wsj-adapter"
+Repository = "https://github.com/ariana-ch/wsj-adapter"
+Issues = "https://github.com/ariana-ch/wsj-adapter/issues"
+Documentation = "https://github.com/ariana-ch/wsj-adapter#readme"
+Changelog = "https://github.com/ariana-ch/wsj-adapter/blob/main/CHANGELOG.md"

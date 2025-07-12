@@ -18,21 +18,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flexible date range filtering
 - Options for latest records/articles per day
 - Comprehensive documentation and examples
+- Full test suite with unit and integration tests
+- Multiple installation options and requirements files
+- Python 3.13 support
+- Enhanced development tooling (mypy, black, pytest-cov, etc.)
 
 ### Changed
-- N/A
-
-### Deprecated
-- N/A
-
-### Removed
-- N/A
+- **BREAKING**: Replaced `bs4>=0.0.2` with `beautifulsoup4>=4.12.0` for direct dependency management
+- Updated minimum pandas version from 1.3.0 to 1.5.0 for performance improvements
+- Updated minimum requests version from 2.32.0 to 2.28.0 for better compatibility
+- Enhanced development dependencies with comprehensive tooling
+- Improved package metadata and classifiers
+- Added support for Python 3.13
+- Enhanced documentation with dependency analysis
 
 ### Fixed
-- N/A
+- Fixed invalid regex escape sequence warning in date parsing
+- Resolved dependency confusion with bs4 dummy package
+- Improved error handling in content extraction
 
 ### Security
-- N/A
+- Updated to secure dependency versions with latest security patches
+- Implemented proper version constraints for security updates
+- Added security considerations documentation
 
 ## [0.0.1] - 2024-01-01
 

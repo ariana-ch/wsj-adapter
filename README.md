@@ -156,10 +156,10 @@ Please use this tool responsibly and in accordance with the Internet Archive's t
 
 ## Requirements
 
-- Python 3.9+
-- bs4 (BeautifulSoup4)
-- pandas
-- requests
+- Python 3.9+ (including Python 3.13)
+- beautifulsoup4 (HTML/XML parsing)
+- pandas (data manipulation)
+- requests (HTTP client)
 
 ## License
 

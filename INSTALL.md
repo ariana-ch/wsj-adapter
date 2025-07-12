@@ -62,9 +62,12 @@ pip install -e ".[dev]"
 ```
 
 This will install additional packages for testing and development:
-- pytest
+- pytest (testing framework)
+- pytest-cov (test coverage)
 - black (code formatter)
 - flake8 (linter)
+- mypy (static type checking)
+- coverage (code coverage analysis)
 
 ## Virtual Environment Setup (Recommended)
 
@@ -128,9 +131,18 @@ print("WSJ Adapter initialized successfully!")
 
 The package requires the following Python packages, which will be installed automatically:
 
-- **bs4** (>=0.0.2) - HTML parsing
-- **pandas** (>=1.3.0) - Data manipulation
-- **requests** (>=2.32.0) - HTTP requests
+- **beautifulsoup4** (>=4.12.0) - HTML parsing and web scraping
+- **pandas** (>=1.5.0) - Data manipulation and analysis  
+- **requests** (>=2.28.0) - HTTP requests and session management
+
+### Optional Dependencies
+
+For enhanced performance and development:
+
+- **lxml** (>=4.9.0) - Faster XML/HTML parsing (2-10x speed improvement)
+- **pytest** (>=7.0.0) - Testing framework
+- **black** (>=23.0.0) - Code formatting
+- **mypy** (>=1.0.0) - Static type checking
 
 ## Troubleshooting
 
