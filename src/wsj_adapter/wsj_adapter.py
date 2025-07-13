@@ -419,7 +419,9 @@ class WSJAdapter:
             df['datetime'] = pd.to_datetime(df['timestamp'], format='%Y%m%d%H%M%S')
             df['date'] = df['datetime'].dt.date
             df = df.sort_values(by='datetime')
-            df = df.groupby(['date', 'original'], as_index=False).last()
+            df['clean_url'] = df.original.apply(lambda x: '/'.join(
+                [i.strip() for i in x.replace('http://', '').replace('https://', '').split('/') if i.strip()]))
+            df = df.groupby(['date', 'clean_url'], as_index=False).last()
             records = df[['timestamp', 'original']].values.tolist()
 
         return records
