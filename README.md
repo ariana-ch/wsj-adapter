@@ -13,7 +13,9 @@ The WSJ Adapter allows you to retrieve archived Wall Street Journal articles usi
 - **Parallel processing**: Efficient concurrent downloading with configurable workers
 - **Content extraction**: Clean extraction of headlines, content, summaries, and metadata
 - **Stock ticker extraction**: Automatically extracts and formats stock information
-- **Flexible filtering**: Options to get latest records/articles per day
+- **Smart sampling**: Sample a configurable number of website captures per day
+- **Sequential processing**: Process multiple article links until one returns a result
+- **Newsletter support**: Extract content from WSJ newsletter formats
 - **Rate limiting**: Built-in throttling to be respectful to the Wayback Machine
 
 ## Installation
@@ -44,8 +46,7 @@ adapter = WSJAdapter(
     end_date=datetime.date(2024, 1, 31),
     topics=['/business/', '/finance/'],  # Optional: specify topics
     max_workers=3,  # Optional: number of concurrent workers
-    latest_records=True,  # Optional: get only latest record per day
-    latest_articles=True  # Optional: get only latest article per day
+    no_of_captures=10  # Optional: sample 10 captures per day per topic
 )
 
 # Download articles
@@ -107,20 +108,18 @@ adapter = WSJAdapter(
     end_date=datetime.date(2024, 1, 31),
     topics=TOPICS,  # Use all predefined topics
     max_workers=5,  # Increase workers for faster processing
-    latest_records=False,  # Get all records, not just latest
-    latest_articles=False  # Get all articles, not just latest
+    no_of_captures=15  # Sample 15 captures per day per topic
 )
 ```
 
 ### Working with Large Date Ranges
 
 ```python
-# For large date ranges, consider using latest_records and latest_articles
+# For large date ranges, consider using fewer captures per day
 adapter = WSJAdapter(
     start_date=datetime.date(2023, 1, 1),
     end_date=datetime.date(2023, 12, 31),
-    latest_records=True,  # Reduces duplicate snapshots
-    latest_articles=True,  # Reduces duplicate articles
+    no_of_captures=5,  # Sample fewer captures to reduce processing time
     max_workers=3  # Be conservative with workers for large ranges
 )
 ```

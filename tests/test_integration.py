@@ -22,8 +22,7 @@ class TestWSJAdapterIntegration(unittest.TestCase):
             end_date=datetime.date(2024, 1, 2),
             topics=['/business/'],
             max_workers=2,
-            latest_records=True,
-            latest_articles=True
+            no_of_captures=5
         )
     
     @patch('wsj_adapter.wsj_adapter.safe_get')
@@ -255,13 +254,12 @@ class TestWSJAdapterIntegration(unittest.TestCase):
     @patch('wsj_adapter.wsj_adapter.safe_get')
     def test_date_filtering_integration(self, mock_safe_get):
         """Test integration with date filtering options."""
-        # Test with latest_records=True
+        # Test with no_of_captures=1
         latest_adapter = WSJAdapter(
             start_date=datetime.date(2024, 1, 1),
             end_date=datetime.date(2024, 1, 2),
             topics=['/business/'],
-            latest_records=True,
-            latest_articles=True
+            no_of_captures=1
         )
         
         # Mock CDX response with multiple records for same day

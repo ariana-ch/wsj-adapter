@@ -12,7 +12,7 @@ from wsj_adapter import WSJAdapter
 from wsj_adapter.wsj_adapter import (
     safe_get, create_session, cdx_query, is_article, 
     extract_article_links, extract_article_content, 
-    process_article_url, process_cdx_record
+    process_article_url
 )
 
 
@@ -30,8 +30,7 @@ class TestWSJAdapterInit(unittest.TestCase):
         self.assertEqual(adapter.end_date, datetime.date(2024, 1, 31))
         self.assertEqual(adapter.url, 'www.wsj.com')
         self.assertEqual(adapter.max_workers, 3)
-        self.assertFalse(adapter.latest_records)
-        self.assertFalse(adapter.latest_articles)
+        self.assertEqual(adapter.no_of_captures, 10)
         self.assertIsNotNone(adapter.session)
     
     def test_init_with_custom_parameters(self):
@@ -43,14 +42,12 @@ class TestWSJAdapterInit(unittest.TestCase):
             end_date=datetime.date(2024, 1, 31),
             topics=custom_topics,
             max_workers=5,
-            latest_records=True,
-            latest_articles=True
+            no_of_captures=15
         )
         
         self.assertEqual(adapter.topics, custom_topics)
         self.assertEqual(adapter.max_workers, 5)
-        self.assertTrue(adapter.latest_records)
-        self.assertTrue(adapter.latest_articles)
+        self.assertEqual(adapter.no_of_captures, 15)
 
 
 class TestUtilityFunctions(unittest.TestCase):
@@ -159,8 +156,10 @@ class TestUtilityFunctions(unittest.TestCase):
         """
         
         soup = BeautifulSoup(html, 'html.parser')
-        content = extract_article_content(soup)
+        content_list = extract_article_content(soup)
         
+        self.assertEqual(len(content_list), 1)
+        content = content_list[0]
         self.assertEqual(content['headline'], 'Test Article Headline')
         self.assertEqual(content['summary'], 'Test article summary')
         self.assertEqual(content['keywords'], 'test, article, keywords')

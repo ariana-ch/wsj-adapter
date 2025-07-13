@@ -5,7 +5,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from logging import getLogger, StreamHandler, INFO
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union
 
 import pandas as pd
 import requests
@@ -50,7 +50,7 @@ EXCLUDE_PATTERNS = ['signin', 'login', 'subscri', 'member', 'footer', 'about', '
                     'bookshelf', 'play.google', 'apple.com/us/app', 'policy/legal-policies', 'djreprints', 'register',
                     'wsj.jobs', 'smartmoney', 'classifieds', 'cultural', 'masterpiece', 'puzzle', 'personal-finance',
                     'style', 'customercenter', 'snapchat', 'cookie-notice', 'facebook', 'instagram', 'twitter',
-                    '/policy/copyright-policy', '/policy/data-policy', 'market-data/quotes/'
+                    '/policy/copyright-policy', '/policy/data-policy', 'market-data/quotes/', 'buyside',
                     'accessibility-statement', 'press-room', 'mansionglobal', 'images', 'mailto', 'youtube', '#']
 
 
@@ -64,7 +64,7 @@ def safe_get(url: str, session: requests.Session, timeout: int = 10) -> Optional
     time.sleep(random.uniform(1.0, 2.0))  # Increased sleep for better etiquette
     logger.debug(f"GET {url}")
     try:
-        resp = session.get(url, timeout=timeout)
+        resp = session.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
         return resp
     except requests.RequestException as e:
@@ -80,8 +80,8 @@ def create_session() -> requests.Session:
     session = requests.Session()
     # Increased total retries and backoff factor for more resilience
     retries = Retry(
-        total=5,  # Reduced retries
-        backoff_factor=1,  # 1s, 2s, 4s, 8s, 16s
+        total=8,  # Reduced retries
+        backoff_factor=2,  # 1s, 2s, 4s, 8s, 16s
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET"]
     )
@@ -128,6 +128,7 @@ def cdx_query(url: str, session: requests.Session, start_date: datetime.date, en
     resp = safe_get(cdx_url, session)
     if not resp:
         logger.error(f"Failed to fetch index for URL '{cdx_url}'")
+        return []
 
     records = resp.json()[1:]  # skip header row
     if not records:
@@ -344,7 +345,9 @@ def extract_newsletter_content(soup: BeautifulSoup) -> List[Dict[str, str]]:
     email_body_selectors = [
         '.email-body__article',
         'td[class*="email-body"]',
-        'table[class*="email"]'
+        'table[class*="email"]',
+        'td.email-body__article',
+        'td[class*="big-num"]'
     ]
     
     is_email_newsletter = False
@@ -352,6 +355,10 @@ def extract_newsletter_content(soup: BeautifulSoup) -> List[Dict[str, str]]:
         if soup.select(selector):
             is_email_newsletter = True
             break
+    
+    # Also check for h1 elements which are common in newsletters
+    if not is_email_newsletter and soup.find_all('h1'):
+        is_email_newsletter = True
     
     if not is_email_newsletter:
         # Fall back to single article extraction
@@ -545,37 +552,41 @@ def extract_article_content(soup: BeautifulSoup) -> List[Dict[str, str]]:
     return extract_newsletter_content(soup)
 
 
-def process_article_url(url: str, session: requests.Session) -> Optional[List[Dict]]:
+
+def process_article_url(url: Union[list, str], session: requests.Session) -> Optional[List[Dict]]:
     """
-    Process a single article URL to extract its content.
+    Process a single article URL or a list of URLs for the same article,
+    to extract its content.
     Returns a list of article data if successful, None otherwise.
     Handles both single articles and newsletter formats with multiple articles.
     """
-    try:
-        response = safe_get(url, session)
-        if not response:
-            return None
+    if not isinstance(url, list):
+        url = [url]
+    urls = url
+    
+    for url in urls:
+        try:
+            response = safe_get(url, session)
+            if not response:
+                continue
 
-        soup = BeautifulSoup(response.text, "html.parser")
-        
-        # Use the unified extraction function
-        articles = extract_article_content(soup)
-        
-        if articles:
-            # Add URL and timestamp to each article
-            timestamp = re.findall(r'\d{14}', url)
-            for article in articles:
-                article['url'] = url
-                article['timestamp'] = timestamp[0] if timestamp else ''
-                article['archive_url'] = url
-            return articles
-
-        return None
-
-    except Exception as e:
-        logger.error(f"Error processing article {url}: {e}")
-        return None
-
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            # Use the unified extraction function
+            articles = extract_article_content(soup)
+            
+            if articles:
+                # Add URL and timestamp to each article
+                timestamp = re.findall(r'\d{14}', url)
+                for article in articles:
+                    article['url'] = url
+                    article['timestamp'] = timestamp[0] if timestamp else ''
+                    article['archive_url'] = url
+                return articles
+        except Exception as e:
+            logger.error(f"Error processing article {url}: {e}")
+            continue
+    return None
 
 def process_cdx_record(record: List[str], shared_session: requests.Session) -> Optional[List[Dict]]:
     """
@@ -615,35 +626,43 @@ def process_cdx_record(record: List[str], shared_session: requests.Session) -> O
 
 class WSJAdapter:
     def __init__(self, start_date: datetime.date, end_date: datetime.date, topics: list = TOPICS,
-                 max_workers: int = 3, latest_records: bool = False, latest_articles: bool = False):
+                 max_workers: int = 3, no_of_captures: int = 10):
         self.url = 'www.wsj.com'
         self.start_date = start_date
         self.end_date = end_date
         self.topics = topics
         self.max_workers = max_workers
-        self.latest_records = latest_records
-        self.latest_articles = latest_articles
+        self.no_of_captures = no_of_captures
         self.session = create_session()
         self.records = None
         self.article_links = None
 
     def get_all_records(self) -> List[List[str]]:
+        def random_choice(df):
+            """
+            Randomly select a specified number of captures from each group.
+            If no captures are available, return an empty DataFrame.
+            """
+            if len(df) == 0:
+                return pd.DataFrame(columns=df.columns)
+            return df.sample(n=min(self.no_of_captures, len(df)), replace=False, random_state=42)
+
         logger.info(f'Retrieving records from:\n{"\n".join([f"www.wsj.com{topic}" for topic in self.topics])}')
         records = []
         for topic in self.topics:
             records.extend(cdx_query(url=f'www.wsj.com{topic}', session=self.session, start_date=self.start_date,
                                      end_date=self.end_date))
-        if self.latest_records:
-            # If latest_records is True, filter to keep only the latest record for each day
+
+        if self.no_of_captures > -1:
             df = pd.DataFrame(records, columns=['timestamp', 'original'])
             df['datetime'] = pd.to_datetime(df['timestamp'], format='%Y%m%d%H%M%S')
             df['date'] = df['datetime'].dt.date
             df = df.sort_values(by='datetime')
             df['clean_url'] = df.original.apply(lambda x: '/'.join(
                 [i.strip() for i in x.replace('http://', '').replace('https://', '').split('/') if i.strip()]))
-            df = df.groupby(['date', 'clean_url'], as_index=False).last()
+            df = (df.groupby(['date', 'clean_url'], as_index=False).apply(random_choice, include_groups=False).
+                  reset_index(drop=True))
             records = df[['timestamp', 'original']].values.tolist()
-
         return records
 
 
@@ -689,16 +708,13 @@ class WSJAdapter:
         #     links = list(set(extract_article_links(soup)))
         #     all_links.extend(links)
 
-        if self.latest_articles:
-            # If latest_articles is True, filter to keep only the latest link for each day
-            df = pd.DataFrame(all_links, columns=['url'])
-            df['date'] = pd.to_datetime(df['url'].str.extract(r'(\d{8})')[0], format='%Y%m%d')
-            df['article_url'] = df.url.apply(lambda x: x.rsplit('https://', 1)[-1])
-            df = df.sort_values(by='date')
-            df = df.groupby(['date', 'article_url'], as_index=False).last()
-            all_links = df['url'].tolist()
-        logger.info(f"Found {len(all_links)} article links from between {self.start_date} and {self.end_date}")
-        return list(set(all_links))
+        df = pd.DataFrame(all_links, columns=['url'])
+        df['date'] = pd.to_datetime(df['url'].str.extract(r'(\d{8})')[0], format='%Y%m%d')
+        df['article_url'] = df.url.apply(lambda x: x.rsplit('https://', 1)[-1])
+        df = df.groupby(['article_url']).url.apply(lambda x: x.tolist()).reset_index()
+        all_links = df['url'].tolist()
+        logger.info(f"Found {len(all_links)} distinct article links from between {self.start_date} and {self.end_date}")
+        return all_links
 
     def download(self) -> List[Dict]:
         logger.info(f"Starting download for {self.url} from {self.start_date} to {self.end_date}")
@@ -716,7 +732,7 @@ class WSJAdapter:
         all_articles = []
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = [executor.submit(process_article_url, link, self.session) for link in article_links]
+            futures = [executor.submit(process_article_url, link_list, self.session) for link_list in article_links]
 
             for future in futures:
                 result = future.result()
@@ -731,11 +747,10 @@ class WSJAdapter:
 if __name__ == "__main__":
     # Test with a smaller date range and fewer workers
     wb = WSJAdapter(
-        latest_records=True,
-        latest_articles=True,
-        start_date=datetime.date(2022, 12, 1),
-        end_date=datetime.date(2022, 12, 31),  # Just one day
-        max_workers=5  # Reduced workers
+        no_of_captures=15,
+        start_date=datetime.date(2022, 12, 10),
+        end_date=datetime.date(2022, 12, 12),  # Just one day
+        max_workers=3  # Reduced workers
     )
     '''
     Found 289 article links from between 2022-12-01 and 2022-12-31
