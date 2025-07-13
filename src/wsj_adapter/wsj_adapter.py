@@ -50,7 +50,7 @@ EXCLUDE_PATTERNS = ['signin', 'login', 'subscri', 'member', 'footer', 'about', '
                     'bookshelf', 'play.google', 'apple.com/us/app', 'policy/legal-policies', 'djreprints', 'register',
                     'wsj.jobs', 'smartmoney', 'classifieds', 'cultural', 'masterpiece', 'puzzle', 'personal-finance',
                     'style', 'customercenter', 'snapchat', 'cookie-notice', 'facebook', 'instagram', 'twitter',
-                    '/policy/copyright-policy', '/policy/data-policy',
+                    '/policy/copyright-policy', '/policy/data-policy', 'market-data/quotes/'
                     'accessibility-statement', 'press-room', 'mansionglobal', 'images', 'mailto', 'youtube', '#']
 
 
@@ -172,10 +172,11 @@ def extract_article_links(soup: BeautifulSoup) -> List[str]:
     return list(set(article_links))
 
 
-def extract_article_content(soup: BeautifulSoup) -> Dict[str, str]:
+def extract_single_article_content(soup: BeautifulSoup) -> Dict[str, str]:
     """
-    Improved article content extraction with better stock ticker handling and metadata.
+    Extract content from a single WSJ article page.
     Returns a dictionary with article data including keywords and cleaned content.
+    Handles standard WSJ article pages with stock ticker information and metadata.
     """
     article_data = {
         'headline': '',
@@ -331,10 +332,224 @@ def extract_article_content(soup: BeautifulSoup) -> Dict[str, str]:
     return article_data
 
 
-def process_article_url(url: str, session: requests.Session) -> Optional[Dict]:
+def extract_newsletter_content(soup: BeautifulSoup) -> List[Dict[str, str]]:
+    """
+    Extract content from WSJ email newsletter formats that contain multiple articles.
+    Returns a list of article dictionaries, each containing headline, content, and metadata.
+    Handles WSJ newsletter formats like Logistics Report, etc.
+    """
+    articles = []
+    
+    # Check if this looks like an email newsletter format
+    email_body_selectors = [
+        '.email-body__article',
+        'td[class*="email-body"]',
+        'table[class*="email"]'
+    ]
+    
+    is_email_newsletter = False
+    for selector in email_body_selectors:
+        if soup.select(selector):
+            is_email_newsletter = True
+            break
+    
+    if not is_email_newsletter:
+        # Fall back to single article extraction
+        single_article = extract_single_article_content(soup)
+        if single_article['headline'] and single_article['content']:
+            return [single_article]
+        return []
+    
+    # Extract date from the page if available
+    date = ''
+    date_patterns = [
+        r'(\d{4}-\d{2}-\d{2})',
+        r'(\d{1,2}/\d{1,2}/\d{4})',
+        r'(\w+ \d{1,2}, \d{4})'
+    ]
+    
+    page_text = soup.get_text()
+    for pattern in date_patterns:
+        match = re.search(pattern, page_text)
+        if match:
+            date = match.group(1)
+            break
+    
+    # Find all h1 elements which typically mark article sections in newsletters
+    h1_elements = soup.find_all('h1')
+    
+    for i, h1 in enumerate(h1_elements):
+        headline = h1.get_text(strip=True)
+        if not headline or len(headline) < 3:
+            continue
+            
+        # Skip common newsletter section headers that aren't articles
+        skip_headers = ['about us', 'unsubscribe', 'privacy policy', 'contact us', 'follow us']
+        if any(skip_header in headline.lower() for skip_header in skip_headers):
+            continue
+        
+        # Find the content associated with this headline
+        content_td = None
+        
+        # Strategy 1: Look for content between this h1 and the next h1
+        next_h1 = None
+        if i + 1 < len(h1_elements):
+            next_h1 = h1_elements[i + 1]
+        
+        # Look for email-body__article td between this h1 and next h1
+        current_element = h1
+        while current_element and current_element != next_h1:
+            # Look for the next td with email-body__article class
+            next_article_td = current_element.find_next('td', class_=lambda x: x and 'email-body__article' in x)
+            if next_article_td:
+                # Check if this td comes before the next h1
+                if not next_h1 or next_article_td.find_previous('h1') == h1:
+                    content_td = next_article_td
+                    break
+            
+            # Also look for td with big-num__txt class (for "Number of the Day" sections)
+            next_num_td = current_element.find_next('td', class_=lambda x: x and 'big-num__txt' in x)
+            if next_num_td:
+                # Check if this td comes before the next h1
+                if not next_h1 or next_num_td.find_previous('h1') == h1:
+                    content_td = next_num_td
+                    break
+            
+            # Move up to parent and try again
+            current_element = current_element.parent
+            if not current_element or current_element.name == 'body':
+                break
+        
+        # Strategy 2: If no content found, look for any paragraph content that follows this h1
+        if not content_td:
+            current_element = h1
+            for _ in range(15):  # Look up to 15 levels up and forward
+                if current_element:
+                    # Look for paragraphs that come after this h1
+                    paragraphs = current_element.find_all_next('p', limit=5)
+                    for p in paragraphs:
+                        # Check if this paragraph comes before the next h1
+                        if not next_h1 or p.find_previous('h1') == h1:
+                            text = p.get_text(strip=True)
+                            if len(text) > 20 and not text.startswith('Copyright'):
+                                content_td = p
+                                break
+                    if content_td:
+                        break
+                    current_element = current_element.parent
+                else:
+                    break
+        
+        if content_td:
+            # Extract and clean the content
+            if content_td.name == 'td':
+                # For td elements, get all paragraphs
+                paragraphs = content_td.find_all('p')
+                if paragraphs:
+                    content_parts = []
+                    for p in paragraphs:
+                        text = p.get_text(strip=True)
+                        if text and len(text) > 10:
+                            content_parts.append(text)
+                    content_text = ' '.join(content_parts)
+                else:
+                    content_text = content_td.get_text(separator=" ", strip=True)
+            else:
+                content_text = content_td.get_text(separator=" ", strip=True)
+            
+            # Clean up the content
+            if content_text:
+                # Remove common newsletter artifacts
+                content_text = re.sub(r'\([^)]*\)', '', content_text)  # Remove parenthetical citations
+                content_text = re.sub(r'https?://[^\s]+', '', content_text)  # Remove URLs
+                content_text = re.sub(r'\s+', ' ', content_text)  # Normalize whitespace
+                content_text = content_text.strip()
+                
+                # Skip if content is too short or looks like navigation
+                if (len(content_text) > 50 and 
+                    not content_text.startswith('Follow') and
+                    not content_text.startswith('Reach') and
+                    not content_text.startswith('Copyright')):
+                    
+                    # Create article data
+                    article_data = {
+                        'headline': headline,
+                        'content': content_text,
+                        'summary': content_text[:200] + '...' if len(content_text) > 200 else content_text,
+                        'keywords': '',
+                        'companies': '',
+                        'date': date,
+                        'article_type': 'newsletter_section'
+                    }
+                    
+                    # Extract company names from content (look for bold text)
+                    companies = []
+                    bold_elements = content_td.find_all(['strong', 'b'])
+                    for bold in bold_elements:
+                        company_name = bold.get_text(strip=True)
+                        if company_name and len(company_name) > 1 and len(company_name) < 50:
+                            # Filter out very long bold text that's likely not a company name
+                            companies.append(company_name)
+                    
+                    article_data['companies'] = ', '.join(set(companies))
+                    
+                    articles.append(article_data)
+    
+    # If no articles found with h1 method, try alternative approach
+    if not articles:
+        # Look for all td elements with email-body__article class
+        article_tds = soup.find_all('td', class_=lambda x: x and 'email-body__article' in x)
+        
+        for td in article_tds:
+            paragraphs = td.find_all('p')
+            if paragraphs:
+                # Combine all paragraphs in this section
+                content_parts = []
+                for p in paragraphs:
+                    text = p.get_text(strip=True)
+                    if len(text) > 20 and not text.startswith('Copyright'):
+                        content_parts.append(text)
+                
+                if content_parts:
+                    content_text = ' '.join(content_parts)
+                    content_text = re.sub(r'\s+', ' ', content_text).strip()
+                    
+                    if len(content_text) > 100:
+                        # Try to extract a headline from the first sentence or create a generic one
+                        first_sentence = content_text.split('.')[0] + '.'
+                        headline = first_sentence[:100] + '...' if len(first_sentence) > 100 else first_sentence
+                        
+                        article_data = {
+                            'headline': headline,
+                            'content': content_text,
+                            'summary': content_text[:200] + '...' if len(content_text) > 200 else content_text,
+                            'keywords': '',
+                            'companies': '',
+                            'date': date,
+                            'article_type': 'newsletter_content'
+                        }
+                        
+                        articles.append(article_data)
+    
+    return articles
+
+
+def extract_article_content(soup: BeautifulSoup) -> List[Dict[str, str]]:
+    """
+    Intelligently extract article content from WSJ pages.
+    Automatically detects whether the page is a single article or a newsletter format
+    and uses the appropriate extraction method.
+    Returns a list of article dictionaries.
+    """
+    # Try newsletter extraction first (it will fall back to single article if needed)
+    return extract_newsletter_content(soup)
+
+
+def process_article_url(url: str, session: requests.Session) -> Optional[List[Dict]]:
     """
     Process a single article URL to extract its content.
-    Returns article data if successful, None otherwise.
+    Returns a list of article data if successful, None otherwise.
+    Handles both single articles and newsletter formats with multiple articles.
     """
     try:
         response = safe_get(url, session)
@@ -342,14 +557,18 @@ def process_article_url(url: str, session: requests.Session) -> Optional[Dict]:
             return None
 
         soup = BeautifulSoup(response.text, "html.parser")
-        article_data = extract_article_content(soup)
-
-        # Only return if we have meaningful content
-        if article_data['headline'] and article_data['content']:
-            article_data['url'] = url
-            article_data['timestamp'] = re.findall(r'\d{14}', url)[0]
-            article_data['archive_url'] = url
-            return article_data
+        
+        # Use the unified extraction function
+        articles = extract_article_content(soup)
+        
+        if articles:
+            # Add URL and timestamp to each article
+            timestamp = re.findall(r'\d{14}', url)
+            for article in articles:
+                article['url'] = url
+                article['timestamp'] = timestamp[0] if timestamp else ''
+                article['archive_url'] = url
+            return articles
 
         return None
 
@@ -385,9 +604,10 @@ def process_cdx_record(record: List[str], shared_session: requests.Session) -> O
     articles = []
     for i, article_url in enumerate(article_links[:10]):
         logger.info(f"Processing article {i + 1}/{min(len(article_links), 10)}: {article_url}")
-        article_data = process_article_url(article_url, shared_session)
-        if article_data:
-            articles.append(article_data)
+        article_results = process_article_url(article_url, shared_session)
+        if article_results:
+            # article_results is now a list, so extend instead of append
+            articles.extend(article_results)
 
     logger.info(f"Successfully extracted {len(articles)} articles from {url}")
     return articles
@@ -426,25 +646,48 @@ class WSJAdapter:
 
         return records
 
+
     def get_all_article_links(self, records: List[List[str]]) -> List[str]:
         """
         Fetch all article links from the Wayback Machine for the specified URL and date range.
         This method retrieves CDX records and processes each record to extract article links.
         """
-        logger.info(f"Fetching all article links between {self.start_date} and {self.end_date}")
 
-        all_links = []
-        for record in records:
+        def _do_get_article_links(record) -> Optional[List[str]]:
             timestamp, website = record
 
             archive_url = f'https://web.archive.org/web/{timestamp}/{website}'
             response = safe_get(archive_url, self.session)
             if not response:
-                continue
+                return None
 
             soup = BeautifulSoup(response.text, "html.parser")
             links = list(set(extract_article_links(soup)))
-            all_links.extend(links)
+            return links
+
+        logger.info(f"Fetching all article links between {self.start_date} and {self.end_date}")
+
+        all_links = []
+
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = [executor.submit(_do_get_article_links, record) for record in records]
+
+            for future in futures:
+                result = future.result()
+                if result:
+                    all_links.extend(result)
+        #
+        # for record in records:
+        #     timestamp, website = record
+        #
+        #     archive_url = f'https://web.archive.org/web/{timestamp}/{website}'
+        #     response = safe_get(archive_url, self.session)
+        #     if not response:
+        #         continue
+        #
+        #     soup = BeautifulSoup(response.text, "html.parser")
+        #     links = list(set(extract_article_links(soup)))
+        #     all_links.extend(links)
 
         if self.latest_articles:
             # If latest_articles is True, filter to keep only the latest link for each day
@@ -478,7 +721,8 @@ class WSJAdapter:
             for future in futures:
                 result = future.result()
                 if result:
-                    all_articles.append(result)
+                    # result is now a list, so extend instead of append
+                    all_articles.extend(result)
         logger.info(f"Successfully extracted {len(all_articles)} articles")
         logger.info(f"Finished processing. Total articles extracted: {len(all_articles)}")
         return all_articles
@@ -489,11 +733,13 @@ if __name__ == "__main__":
     wb = WSJAdapter(
         latest_records=True,
         latest_articles=True,
-        start_date=datetime.date(2020, 1, 1),
-        end_date=datetime.date(2020, 1, 31),  # Just one day
-        max_workers=10  # Reduced workers
+        start_date=datetime.date(2022, 12, 1),
+        end_date=datetime.date(2022, 12, 31),  # Just one day
+        max_workers=5  # Reduced workers
     )
-
+    '''
+    Found 289 article links from between 2022-12-01 and 2022-12-31
+    '''
     downloaded_articles = wb.download()
 
     # Print summary
