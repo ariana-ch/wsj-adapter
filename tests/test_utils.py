@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 from wsj_adapter.wsj_adapter import (
     is_article, extract_article_links, extract_article_content,
-    TOPICS, EXCLUDE_PATTERNS, safe_get, create_session
+    TOPICS, EXCLUDE_PATTERNS, safe_get, create_session, _calculate_content_quality
 )
 
 
@@ -155,8 +155,10 @@ class TestExtractArticleContent(unittest.TestCase):
         """
         
         soup = BeautifulSoup(html, 'html.parser')
-        content = extract_article_content(soup)
+        content_list = extract_article_content(soup)
         
+        self.assertEqual(len(content_list), 1)
+        content = content_list[0]
         self.assertEqual(content['headline'], 'Test Article Headline')
         self.assertEqual(content['summary'], 'This is a test article summary')
         self.assertEqual(content['keywords'], 'test, article, finance')
@@ -177,8 +179,10 @@ class TestExtractArticleContent(unittest.TestCase):
         """
         
         soup = BeautifulSoup(html, 'html.parser')
-        content = extract_article_content(soup)
+        content_list = extract_article_content(soup)
         
+        self.assertEqual(len(content_list), 1)
+        content = content_list[0]
         self.assertEqual(content['headline'], 'Simple Headline')
         self.assertEqual(content['summary'], '')
         self.assertEqual(content['keywords'], '')
@@ -207,8 +211,10 @@ class TestExtractArticleContent(unittest.TestCase):
         """
         
         soup = BeautifulSoup(html, 'html.parser')
-        content = extract_article_content(soup)
+        content_list = extract_article_content(soup)
         
+        self.assertEqual(len(content_list), 1)
+        content = content_list[0]
         self.assertIn('Apple Inc.', content['companies'])
         self.assertIn('AAPL', content['companies'])
         self.assertIn('2.5%', content['companies'])
@@ -226,10 +232,74 @@ class TestExtractArticleContent(unittest.TestCase):
         """
         
         soup = BeautifulSoup(html, 'html.parser')
-        content = extract_article_content(soup)
+        content_list = extract_article_content(soup)
         
+        self.assertEqual(len(content_list), 1)
+        content = content_list[0]
         self.assertEqual(content['headline'], 'Empty Article')
         self.assertEqual(content['content'], '')  # Too short to be included
+    
+    def test_newsletter_extraction(self):
+        """Test extraction from newsletter format."""
+        html = """
+        <html>
+        <body>
+            <h1>Newsletter Section 1</h1>
+            <td class="email-body__article">
+                <p>First newsletter section with substantial content.</p>
+            </td>
+            <h1>Newsletter Section 2</h1>
+            <td class="email-body__article">
+                <p>Second newsletter section with more content.</p>
+            </td>
+        </body>
+        </html>
+        """
+        
+        soup = BeautifulSoup(html, 'html.parser')
+        content_list = extract_article_content(soup)
+        
+        # Should extract multiple articles from newsletter
+        self.assertGreaterEqual(len(content_list), 2)
+        headlines = [article['headline'] for article in content_list]
+        self.assertIn('Newsletter Section 1', headlines)
+        self.assertIn('Newsletter Section 2', headlines)
+
+
+class TestContentQualityCalculation(unittest.TestCase):
+    """Test content quality calculation function."""
+    
+    def test_quality_calculation_basic(self):
+        """Test basic quality calculation."""
+        article = {
+            'headline': 'Test Headline',
+            'content': 'This is test content with sufficient length.',
+            'summary': 'Test summary'
+        }
+        
+        score = _calculate_content_quality([article])
+        self.assertGreater(score, 0.0)
+    
+    def test_quality_calculation_comparison(self):
+        """Test quality comparison between different articles."""
+        short_article = {
+            'headline': 'Short',
+            'content': 'Short content.',
+            'summary': 'Short summary'
+        }
+        
+        long_article = {
+            'headline': 'Long',
+            'content': 'This is a much longer article with substantial content that should score higher.',
+            'summary': 'Longer summary',
+            'keywords': 'test, keywords',
+            'date': '2024-01-01'
+        }
+        
+        short_score = _calculate_content_quality([short_article])
+        long_score = _calculate_content_quality([long_article])
+        
+        self.assertGreater(long_score, short_score)
 
 
 class TestConstants(unittest.TestCase):

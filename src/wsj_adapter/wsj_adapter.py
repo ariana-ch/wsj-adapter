@@ -544,12 +544,72 @@ def extract_newsletter_content(soup: BeautifulSoup) -> List[Dict[str, str]]:
 def extract_article_content(soup: BeautifulSoup) -> List[Dict[str, str]]:
     """
     Intelligently extract article content from WSJ pages.
-    Automatically detects whether the page is a single article or a newsletter format
-    and uses the appropriate extraction method.
+    Tries both single article and newsletter extraction methods,
+    then selects the best result based on content quality and length.
     Returns a list of article dictionaries.
     """
-    # Try newsletter extraction first (it will fall back to single article if needed)
-    return extract_newsletter_content(soup)
+    # Try both extraction methods
+    newsletter_articles = extract_newsletter_content(soup)
+    single_article = extract_single_article_content(soup)
+    
+    # Convert single article to list format for comparison
+    single_article_list = [single_article] if single_article.get('headline') and single_article.get('content') else []
+    
+    # Calculate quality scores for each method
+    newsletter_score = _calculate_content_quality(newsletter_articles)
+    single_article_score = _calculate_content_quality(single_article_list)
+    
+    logger.debug(f"Newsletter extraction score: {newsletter_score}, Single article score: {single_article_score}")
+    
+    # Select the method with the higher score
+    if newsletter_score > single_article_score:
+        logger.debug("Selected newsletter extraction method")
+        return newsletter_articles
+    else:
+        logger.debug("Selected single article extraction method")
+        return single_article_list
+
+
+def _calculate_content_quality(articles: List[Dict[str, str]]) -> float:
+    """
+    Calculate a quality score for extracted articles.
+    Higher scores indicate better content quality.
+    """
+    if not articles:
+        return 0.0
+    
+    total_score = 0.0
+    
+    for article in articles:
+        headline = article.get('headline', '')
+        content = article.get('content', '')
+        summary = article.get('summary', '')
+        
+        # Base score from content length (longer content is generally better)
+        content_score = len(content) * 0.1
+        
+        # Bonus for having a headline
+        headline_bonus = 50 if headline else 0
+        
+        # Bonus for having a summary
+        summary_bonus = 25 if summary else 0
+        
+        # Penalty for very short content (likely not a real article)
+        if len(content) < 100:
+            content_score *= 0.5
+        
+        # Bonus for having keywords or companies (indicates structured content)
+        keywords_bonus = 25 if article.get('keywords') else 0
+        companies_bonus = 25 if article.get('companies') else 0
+        
+        # Bonus for having a date
+        date_bonus = 25 if article.get('date') else 0
+        
+        article_score = content_score + headline_bonus + summary_bonus + keywords_bonus + companies_bonus + date_bonus
+        total_score += article_score
+    
+    # Average score per article
+    return total_score / len(articles) if articles else 0.0
 
 
 
