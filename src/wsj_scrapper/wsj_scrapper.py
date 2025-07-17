@@ -7,6 +7,10 @@ import socket
 from concurrent.futures import ThreadPoolExecutor
 from logging import getLogger, StreamHandler, INFO
 from typing import List, Optional, Dict, Union
+from typing import List, Optional
+from pprint import pformat
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 import pandas as pd
 import requests
@@ -50,6 +54,38 @@ EXCLUDE_PATTERNS = ['signin', 'login', 'subscri', 'member', 'footer', 'about', '
                     'style', 'customercenter', 'snapchat', 'cookie-notice', 'facebook', 'instagram', 'twitter',
                     '/policy/copyright-policy', '/policy/data-policy', 'market-data/quotes/', 'buyside','livecoverage/stock'
                     'accessibility-statement', 'press-room', 'mansionglobal', 'images', 'mailto', 'youtube', '#']
+
+
+# --- Pydantic Singleton Implementation ---
+class Config(BaseSettings):
+    """Global singleton configuration for scrapers, powered by Pydantic."""
+
+    _instance: Optional["Config"] = None
+
+    def __new__(cls) -> "Config":
+        """Ensures that only one instance of the Config class is ever created."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    # Define fields with types and default values. Pydantic handles the rest.
+    # No more getters, setters, or manual _init_defaults() needed.
+    topics: List[str] = Field(default_factory=lambda: TOPICS[:])
+    exclude_patterns: List[str] = Field(default_factory=lambda: EXCLUDE_PATTERNS[:])
+    max_retries: int = 5
+    timeout: int = 10
+    max_workers: int = 10
+    backoff_factor: float = 2.0
+
+    def reset_to_defaults(self) -> None:
+        """Resets the configuration to its original default values."""
+        # Re-run Pydantic's __init__ on the existing instance to apply defaults
+        self.__init__()
+
+    def summary(self) -> str:
+        """Return a pretty-printed string summary of the current configuration."""
+        # Pydantic's model_dump() creates the dictionary for us
+        return pformat(self.model_dump(), indent=2, width=100)
 
 
 class Config:
@@ -144,6 +180,8 @@ class Config:
         cls._max_workers = 10
         cls._backoff_factor = 2.0
         cls._instance = None
+
+
 
 
 logger = _get_logger('WSJAdapter')
