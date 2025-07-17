@@ -52,7 +52,7 @@ EXCLUDE_PATTERNS = ['signin', 'login', 'subscri', 'member', 'footer', 'about', '
                     'accessibility-statement', 'press-room', 'mansionglobal', 'images', 'mailto', 'youtube', '#']
 
 
-class WSJConfig:
+class Config:
     """Global configuration for data handlers."""
 
     _instance = None
@@ -60,6 +60,7 @@ class WSJConfig:
     _exclude_patterns = EXCLUDE_PATTERNS
     _max_retries = 5
     _timeout = 10
+    _max_workers = 10
 
     def __new__(cls):
         if cls._instance is None:
@@ -91,6 +92,12 @@ class WSJConfig:
         cls._instance = None
 
     @classmethod
+    def set_max_workers(cls, max_workers: int):
+        """Set the maximum number of worker threads for concurrent requests."""
+        cls._max_workers = max_workers
+        cls._instance = None
+
+    @classmethod
     def get_topics(cls) -> List[str]:
         """Get the current topics."""
         return cls._topics
@@ -111,12 +118,18 @@ class WSJConfig:
         return cls._timeout
 
     @classmethod
+    def get_max_workers(cls) -> int:
+        """Get the current maximum number of worker threads."""
+        return cls._max_workers
+
+    @classmethod
     def reset_to_default(cls):
         """Reset to default root path (module directory)."""
         cls._max_retries = 5
         cls._timeout = 10
         cls._topics = TOPICS
         cls._exclude_patterns = EXCLUDE_PATTERNS
+        cls._max_workers = 10
         cls._instance = None
 
 
@@ -125,8 +138,8 @@ logger = _get_logger('WSJAdapter')
 
 def safe_get(url: str, session: requests.Session):
     retries = 0
-    max_retries = WSJConfig.get_max_retries()
-    timeout = WSJConfig.get_timeout()
+    max_retries = Config.get_max_retries()
+    timeout = Config.get_timeout()
     err61_sleep: float = 2.0
     time.sleep(random.uniform(1.0, 2.0))  # Increased sleep for better etiquette
 
@@ -237,7 +250,7 @@ def extract_article_links(soup: BeautifulSoup) -> List[str]:
 
         # Skip if href is empty or just a fragment
         if (not href or href.startswith('#') or
-                any([pattern in href.lower() for pattern in WSJConfig.get_exclude_patterns()]) or
+                any([pattern in href.lower() for pattern in Config.get_exclude_patterns()]) or
                 not href.startswith('http')):
             continue
 
@@ -781,9 +794,9 @@ class WSJScrapper:
                 return pd.DataFrame(columns=df.columns)
             return df.sample(n=min(self.no_of_captures, len(df)), replace=False, random_state=42)
 
-        logger.info(f'Retrieving records from:\n{"\n".join([f"www.wsj.com{topic}" for topic in WSJConfig.get_topics()])}\n')
+        logger.info(f'Retrieving records from:\n{"\n".join([f"www.wsj.com{topic}" for topic in Config.get_topics()])}\n')
         records = []
-        for topic in WSJConfig.get_topics():
+        for topic in Config.get_topics():
             records.extend(cdx_query(url=f'www.wsj.com{topic}', session=self.session, start_date=self.start_date,
                                      end_date=self.end_date))
 
@@ -821,7 +834,7 @@ class WSJScrapper:
 
         all_links = []
 
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=Config.get_max_workers()) as executor:
             futures = [executor.submit(_do_get_article_links, record) for record in records]
 
             for future in futures:
@@ -852,7 +865,7 @@ class WSJScrapper:
 
         all_articles = []
 
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=Config.get_max_workers()) as executor:
             futures = [executor.submit(process_article_url, link_list, self.session) for link_list in article_links]
 
             for future in futures:
