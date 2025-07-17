@@ -8,10 +8,10 @@ This package provides the WSJScrapper class which allows you to:
 - Handle multiple topics and date ranges
 """
 
-from .wsj_scrapper import WSJScrapper, TOPICS, EXCLUDE_PATTERNS
+from .wsj_scrapper import WSJScrapper, WSJConfig
 
 __version__ = "0.0.1"
 __author__ = "Ariana Christodoulou"
 __email__ = "ariana.chr@gmail.com"
 
-__all__ = ["WSJScrapper", "TOPICS", "EXCLUDE_PATTERNS"]
+__all__ = ["WSJScrapper", "WSJConfig"]

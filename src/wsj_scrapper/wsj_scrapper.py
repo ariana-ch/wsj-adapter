@@ -3,6 +3,7 @@ import json
 import random
 import re
 import time
+import socket
 from concurrent.futures import ThreadPoolExecutor
 from logging import getLogger, StreamHandler, INFO
 from typing import List, Optional, Dict, Union
@@ -22,9 +23,6 @@ def _get_logger(name: str = __name__):
     logger.addHandler(handler)
     logger.propagate = False
     return logger
-
-
-logger = _get_logger('WSJAdapter')
 
 TOPICS = ['',
           '/opinion/',
@@ -54,22 +52,100 @@ EXCLUDE_PATTERNS = ['signin', 'login', 'subscri', 'member', 'footer', 'about', '
                     'accessibility-statement', 'press-room', 'mansionglobal', 'images', 'mailto', 'youtube', '#']
 
 
-def safe_get(url: str, session: requests.Session, timeout: int = 10) -> Optional[requests.Response]:
-    """
-    GET with retries configured on the session,
-    plus a randomized sleep to throttle.
-    Returns None if all retries fail.
-    """
-    # Throttle - this sleep is per-thread, so for parallel calls, it means each thread waits.
-    time.sleep(random.uniform(0.1, 1.0))  # Increased sleep for better etiquette
-    logger.debug(f"GET {url}")
-    try:
-        resp = session.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
-        resp.raise_for_status()
-        return resp
-    except requests.RequestException as e:
-        logger.error(f"GET {url} failed with exception: {e}")
-        return None
+class WSJConfig:
+    """Global configuration for data handlers."""
+
+    _instance = None
+    _topics = TOPICS
+    _exclude_patterns = EXCLUDE_PATTERNS
+    _max_retries = 5
+    _timeout = 10
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    @classmethod
+    def set_topics(cls, topics: List[str]):
+        """Set the topics/subdomains of www.wsj.com to query."""
+        cls._topics = topics
+        cls._instance = None  # Reset singleton to ensure new path is used
+
+    @classmethod
+    def set_exclude_patterns(cls, exclude_patterns: List[str]):
+        """Set the patterns to exclude from article links."""
+        cls._exclude_patterns = exclude_patterns
+        cls._instance = None
+
+    @classmethod
+    def set_max_retries(cls, max_retries: int):
+        """Set the maximum number of retries for HTTP requests."""
+        cls._max_retries = max_retries
+        cls._instance = None
+
+    @classmethod
+    def set_timeout(cls, timeout: int):
+        """Set the timeout for HTTP requests."""
+        cls._timeout = timeout
+        cls._instance = None
+
+    @classmethod
+    def get_topics(cls) -> List[str]:
+        """Get the current topics."""
+        return cls._topics
+
+    @classmethod
+    def get_exclude_patterns(cls) -> List[str]:
+        """Get the current exclude patterns."""
+        return cls._exclude_patterns
+
+    @classmethod
+    def get_max_retries(cls) -> int:
+        """Get the current maximum number of retries."""
+        return cls._max_retries
+
+    @classmethod
+    def get_timeout(cls) -> int:
+        """Get the current timeout for HTTP requests."""
+        return cls._timeout
+
+    @classmethod
+    def reset_to_default(cls):
+        """Reset to default root path (module directory)."""
+        cls._max_retries = 5
+        cls._timeout = 10
+        cls._topics = TOPICS
+        cls._exclude_patterns = EXCLUDE_PATTERNS
+        cls._instance = None
+
+
+logger = _get_logger('WSJAdapter')
+
+
+def safe_get(url: str, session: requests.Session):
+    retries = 0
+    max_retries = WSJConfig.get_max_retries()
+    timeout = WSJConfig.get_timeout()
+    err61_sleep: float = 2.0
+    time.sleep(random.uniform(1.0, 2.0))  # Increased sleep for better etiquette
+
+    while retries < max_retries:
+        try:
+            response = session.get(url, timeout=timeout)
+            response.raise_for_status()
+            return response
+        except requests.RequestException as e:
+            cause = e.__cause__
+            if isinstance(cause, socket.error) and getattr(cause, 'errno', None) == 61:
+                print(f"[{url}] Connection refused (Errno 61). Sleeping {err61_sleep}s and retrying.")
+                time.sleep(err61_sleep)
+            else:
+                print(f"[{url}] Request failed: {e}.")
+                time.sleep(random.uniform(1.0, 2.0))
+            retries += 1
+    print(f"[{url}] Giving up after {max_retries} retries.")
+    return None
 
 
 def create_session() -> requests.Session:
@@ -80,7 +156,7 @@ def create_session() -> requests.Session:
     session = requests.Session()
     # Increased total retries and backoff factor for more resilience
     retries = Retry(
-        total=2,  # Reduced retries
+        total=5,  # Reduced retries
         backoff_factor=2,  # 1s, 2s, 4s, 8s, 16s
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET"]
@@ -160,7 +236,8 @@ def extract_article_links(soup: BeautifulSoup) -> List[str]:
         href = link['href']
 
         # Skip if href is empty or just a fragment
-        if (not href or href.startswith('#') or any([pattern in href.lower() for pattern in EXCLUDE_PATTERNS]) or
+        if (not href or href.startswith('#') or
+                any([pattern in href.lower() for pattern in WSJConfig.get_exclude_patterns()]) or
                 not href.startswith('http')):
             continue
 
@@ -685,13 +762,10 @@ def process_cdx_record(record: List[str], shared_session: requests.Session) -> O
 
 
 class WSJScrapper:
-    def __init__(self, start_date: datetime.date, end_date: datetime.date, topics: list = TOPICS,
-                 max_workers: int = 3, no_of_captures: int = 10):
+    def __init__(self, start_date: datetime.date, end_date: datetime.date, no_of_captures: int = 10):
         self.url = 'www.wsj.com'
         self.start_date = start_date
         self.end_date = end_date
-        self.topics = topics
-        self.max_workers = max_workers
         self.no_of_captures = no_of_captures
         self.session = create_session()
         self.records = None
@@ -707,9 +781,9 @@ class WSJScrapper:
                 return pd.DataFrame(columns=df.columns)
             return df.sample(n=min(self.no_of_captures, len(df)), replace=False, random_state=42)
 
-        logger.info(f'Retrieving records from:\n{"\n".join([f"www.wsj.com{topic}" for topic in self.topics])}')
+        logger.info(f'Retrieving records from:\n{"\n".join([f"www.wsj.com{topic}" for topic in WSJConfig.get_topics()])}\n')
         records = []
-        for topic in self.topics:
+        for topic in WSJConfig.get_topics():
             records.extend(cdx_query(url=f'www.wsj.com{topic}', session=self.session, start_date=self.start_date,
                                      end_date=self.end_date))
 
