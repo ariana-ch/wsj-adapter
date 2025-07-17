@@ -48,9 +48,7 @@ setup(
     install_requires=[
         "beautifulsoup4>=4.12.0",
         "pandas>=1.5.0",
-        "requests>=2.28.0",
-        "pydantic>=2.11.0",
-        "pydantic-settings>=2.10.0",
+        "requests>=2.28.0"
     ],
     extras_require={
         "dev": [
