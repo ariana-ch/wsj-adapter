@@ -61,6 +61,7 @@ class Config:
     _max_retries = 5
     _timeout = 10
     _max_workers = 10
+    _backoff_factor = 2.0  # Backoff factor for retries
 
     def __new__(cls):
         if cls._instance is None:
@@ -98,6 +99,12 @@ class Config:
         cls._instance = None
 
     @classmethod
+    def set_backoff_factor(cls, backoff_factor: float):
+        """Set the backoff factor for retries."""
+        cls._backoff_factor = backoff_factor
+        cls._instance = None
+
+    @classmethod
     def get_topics(cls) -> List[str]:
         """Get the current topics."""
         return cls._topics
@@ -123,6 +130,11 @@ class Config:
         return cls._max_workers
 
     @classmethod
+    def get_backoff_factor(cls) -> float:
+        """Get the current backoff factor for retries."""
+        return cls._backoff_factor
+
+    @classmethod
     def reset_to_default(cls):
         """Reset to default root path (module directory)."""
         cls._max_retries = 5
@@ -130,6 +142,7 @@ class Config:
         cls._topics = TOPICS
         cls._exclude_patterns = EXCLUDE_PATTERNS
         cls._max_workers = 10
+        cls._backoff_factor = 2.0
         cls._instance = None
 
 
@@ -137,28 +150,21 @@ logger = _get_logger('WSJAdapter')
 
 
 def safe_get(url: str, session: requests.Session):
-    retries = 0
-    max_retries = Config.get_max_retries()
+    """
+    GET with retries configured on the session,
+    plus a randomized sleep to throttle.
+    Returns None if all retries fail.
+    """
     timeout = Config.get_timeout()
-    err61_sleep: float = 2.0
-    time.sleep(random.uniform(1.0, 2.0))  # Increased sleep for better etiquette
-
-    while retries < max_retries:
-        try:
-            response = session.get(url, timeout=timeout)
-            response.raise_for_status()
-            return response
-        except requests.RequestException as e:
-            cause = e.__cause__
-            if isinstance(cause, socket.error) and getattr(cause, 'errno', None) == 61:
-                print(f"[{url}] Connection refused (Errno 61). Sleeping {err61_sleep}s and retrying.")
-                time.sleep(err61_sleep)
-            else:
-                print(f"[{url}] Request failed: {e}.")
-                time.sleep(random.uniform(1.0, 2.0))
-            retries += 1
-    print(f"[{url}] Giving up after {max_retries} retries.")
-    return None
+    time.sleep(random.uniform(0.5, 1.5))  # Increased sleep for better etiquette
+    logger.debug(f"GET {url}")
+    try:
+        resp = session.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        return resp
+    except requests.RequestException as e:
+        logger.error(f"GET {url} failed with exception: {e}")
+        return None
 
 
 def create_session() -> requests.Session:
@@ -169,8 +175,8 @@ def create_session() -> requests.Session:
     session = requests.Session()
     # Increased total retries and backoff factor for more resilience
     retries = Retry(
-        total=5,  # Reduced retries
-        backoff_factor=2,  # 1s, 2s, 4s, 8s, 16s
+        total=Config.get_max_retries(),  # Reduced retries
+        backoff_factor=Config.get_backoff_factor(),  # 1s, 2s, 4s, 8s, 16s
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET"]
     )
