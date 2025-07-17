@@ -2,8 +2,17 @@
 requires = ["hatchling >= 1.26"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["wsj_scrapper"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/wsj_scrapper"]
+
+[tool.hatch.build]
+root = "src"
+
 [project]
-name = "wsj-adapter"
+name = "wsj-scrapper"
 version = "0.0.1"
 authors = [
   { name="Ariana Christodoulou", email="ariana.chr@gmail.com" },
@@ -54,8 +63,8 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ariana-ch/wsj-adapter"
-Repository = "https://github.com/ariana-ch/wsj-adapter"
-Issues = "https://github.com/ariana-ch/wsj-adapter/issues"
-Documentation = "https://github.com/ariana-ch/wsj-adapter#readme"
-Changelog = "https://github.com/ariana-ch/wsj-adapter/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/ariana-ch/wsj-scrapper"
+Repository = "https://github.com/ariana-ch/wsj-scrapper"
+Issues = "https://github.com/ariana-ch/wsj-scrapper/issues"
+Documentation = "https://github.com/ariana-ch/wsj-scrapper#readme"
+Changelog = "https://github.com/ariana-ch/wsj-scrapper/blob/main/CHANGELOG.md"

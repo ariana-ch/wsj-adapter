@@ -13,19 +13,19 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text(encoding='utf-8')
 
 setup(
-    name="wsj-adapter",
+    name="wsj-scrapper",
     version="0.0.1",
     author="Ariana Christodoulou",
     author_email="ariana.chr@gmail.com",
     description="A package to download articles from the Wall Street Journal via the Wayback Machine.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/ariana-ch/wsj-adapter",
+    url="https://github.com/ariana-ch/wsj-scrapper",
     project_urls={
-        "Bug Tracker": "https://github.com/ariana-ch/wsj-adapter/issues",
-        "Documentation": "https://github.com/ariana-ch/wsj-adapter#readme",
-        "Source Code": "https://github.com/ariana-ch/wsj-adapter",
-        "Changelog": "https://github.com/ariana-ch/wsj-adapter/blob/main/CHANGELOG.md",
+        "Bug Tracker": "https://github.com/ariana-ch/wsj-scrapper/issues",
+        "Documentation": "https://github.com/ariana-ch/wsj-scrapper#readme",
+        "Source Code": "https://github.com/ariana-ch/wsj-scrapper",
+        "Changelog": "https://github.com/ariana-ch/wsj-scrapper/blob/main/CHANGELOG.md",
     },
     package_dir={"": "src"},
     packages=find_packages(where="src"),

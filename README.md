@@ -1,10 +1,10 @@
-# WSJ Adapter
+# WSJ Scrapper
 
 A Python package to download articles from the Wall Street Journal via the Wayback Machine.
 
 ## Description
 
-The WSJ Adapter allows you to retrieve archived Wall Street Journal articles using the Internet Archive's Wayback Machine. This is particularly useful for researchers, analysts, and anyone who needs access to historical WSJ content for analysis or research purposes.
+The WSJ Scrapper allows you to retrieve archived Wall Street Journal articles using the Internet Archive's Wayback Machine. This is particularly useful for researchers, analysts, and anyone who needs access to historical WSJ content for analysis or research purposes.
 
 ## Features
 
@@ -20,28 +20,28 @@ The WSJ Adapter allows you to retrieve archived Wall Street Journal articles usi
 
 ## Installation
 
-### From your private repository
-
+### From source
 ```bash
-pip install wsj-adapter
+git clone https://github.com/ariana-ch/wsj-scrapper.git
+cd wsj-scrapper
+pip install -e .
 ```
 
-### From source
+### Install via Git (recommended)
+You can install the latest version directly from GitHub using pip:
 
 ```bash
-git clone https://github.com/ariana-ch/wsj-adapter.git
-cd wsj-adapter
-pip install -e .
+pip install git+https://github.com/ariana-ch/wsj-scrapper.git
 ```
 
 ## Quick Start
 
 ```python
 import datetime
-from wsj_adapter import WSJAdapter
+from wsj import WSJScrapper
 
-# Initialize the adapter
-adapter = WSJAdapter(
+# Initialize the scraper
+scrapper = WSJScrapper(
     start_date=datetime.date(2024, 1, 1),
     end_date=datetime.date(2024, 1, 31),
     topics=['/business/', '/finance/'],  # Optional: specify topics
@@ -50,7 +50,7 @@ adapter = WSJAdapter(
 )
 
 # Download articles
-articles = adapter.download()
+articles = scrapper.download()
 
 # Process results
 for article in articles:
@@ -64,7 +64,7 @@ for article in articles:
 
 ## Available Topics
 
-The adapter supports the following WSJ topics:
+The scraper supports the following WSJ topics:
 
 - `''` - Main page
 - `'/opinion/'` - Opinion section
@@ -100,10 +100,10 @@ Each article returns a dictionary with the following fields:
 ### Custom Configuration
 
 ```python
-from wsj_adapter import WSJAdapter, TOPICS
+from wsj import WSJScrapper, TOPICS
 
 # Use all available topics
-adapter = WSJAdapter(
+scrapper = WSJScrapper(
     start_date=datetime.date(2024, 1, 1),
     end_date=datetime.date(2024, 1, 31),
     topics=TOPICS,  # Use all predefined topics
@@ -116,7 +116,7 @@ adapter = WSJAdapter(
 
 ```python
 # For large date ranges, consider using fewer captures per day
-adapter = WSJAdapter(
+scrapper = WSJScrapper(
     start_date=datetime.date(2023, 1, 1),
     end_date=datetime.date(2023, 12, 31),
     no_of_captures=5,  # Sample fewer captures to reduce processing time
@@ -128,18 +128,66 @@ adapter = WSJAdapter(
 
 ```python
 # Get records and article links without downloading content
-adapter = WSJAdapter(
+scrapper = WSJScrapper(
     start_date=datetime.date(2024, 1, 1),
     end_date=datetime.date(2024, 1, 31)
 )
 
 # Get raw CDX records
-records = adapter.get_all_records()
+records = scrapper.get_all_records()
 print(f"Found {len(records)} CDX records")
 
 # Get article links
-article_links = adapter.get_all_article_links(records)
+article_links = scrapper.get_all_article_links(records)
 print(f"Found {len(article_links)} article links")
+```
+
+## Examples
+
+### Basic Usage
+```python
+import datetime
+from wsj import WSJScrapper
+
+# Simple example for a small date range
+scrapper = WSJScrapper(
+    start_date=datetime.date(2024, 1, 1),
+    end_date=datetime.date(2024, 1, 2),
+    topics=['/business/', '/finance/'],
+    max_workers=2,
+    no_of_captures=5
+)
+
+articles = scrapper.download()
+print(f"Downloaded {len(articles)} articles")
+```
+
+### Data Analysis
+```python
+import pandas as pd
+from wsj import WSJScrapper
+import datetime
+
+# Download articles for analysis
+scrapper = WSJScrapper(
+    start_date=datetime.date(2024, 1, 1),
+    end_date=datetime.date(2024, 1, 31),
+    topics=['/business/'],
+    max_workers=3
+)
+
+articles = scrapper.download()
+
+# Convert to DataFrame for analysis
+df = pd.DataFrame(articles)
+
+# Basic statistics
+print(f"Total articles: {len(df)}")
+print(f"Average content length: {df['content'].str.len().mean():.0f} characters")
+print(f"Articles with companies mentioned: {df['companies'].str.len().gt(0).sum()}")
+
+# Save to CSV
+df.to_csv('wsj_articles.csv', index=False)
 ```
 
 ## Rate Limiting and Ethics
@@ -166,12 +214,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
-
-## Support
-
-For questions, bug reports, or feature requests, please open an issue on our [GitHub repository](https://github.com/ariana-ch/wsj-adapter/issues).
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for a history of changes to this project. 
+For questions, bug reports, or feature requests, please open an issue on our [GitHub repository](https://github.com/ariana-ch/wsj-scrapper/issues). 
