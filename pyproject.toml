@@ -1,26 +1,19 @@
 [build-system]
-requires = ["hatchling >= 1.26"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["wsj_scrapper"]
-
-[tool.hatch.build.targets.sdist]
-include = ["src/wsj_scrapper"]
-
-[tool.hatch.build]
-root = "src"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "wsj-scrapper"
 version = "0.0.1"
-authors = [
-  { name="Ariana Christodoulou", email="ariana.chr@gmail.com" },
-]
 description = "A package to download articles from the Wall Street Journal via the Wayback Machine."
 readme = "README.md"
-requires-python = ">=3.9"
+license = "MIT"
+authors = [
+    {name = "Ariana Christodoulou", email = "ariana.chr@gmail.com"}
+]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -28,15 +21,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Financial and Insurance Industry",
     "Topic :: Office/Business :: Financial :: Investment",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content :: News/Diary",
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
-license = "MIT"
-license-files = ["LICENCE*"]
-keywords = ["wsj", "news articles", "wayback machine", "web scraping", "financial data"]
+requires-python = ">=3.9"
 dependencies = [
     "beautifulsoup4>=4.12.0",
     "pandas>=1.5.0",
@@ -68,3 +57,9 @@ Repository = "https://github.com/ariana-ch/wsj-scrapper"
 Issues = "https://github.com/ariana-ch/wsj-scrapper/issues"
 Documentation = "https://github.com/ariana-ch/wsj-scrapper#readme"
 Changelog = "https://github.com/ariana-ch/wsj-scrapper/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"

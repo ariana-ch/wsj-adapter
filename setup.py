@@ -1,5 +1,5 @@
 """
-Setup script for WSJ Adapter package.
+Setup script for WSJ Scrapper package.
 
 This setup.py is provided for backwards compatibility.
 The primary build configuration is in pyproject.toml.
