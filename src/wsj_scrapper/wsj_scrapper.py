@@ -735,7 +735,7 @@ def process_article_url(url: Union[list, str], session: requests.Session) -> Opt
                 # Add URL and timestamp to each article
                 timestamp = re.findall(r'\d{14}', url)
                 for article in articles:
-                    article['url'] = url
+                    article['url'] = url.rsplit('https://', 1)[-1]
                     article['timestamp'] = timestamp[0] if timestamp else ''
                     article['archive_url'] = url
                 return articles
@@ -789,7 +789,7 @@ class WSJScrapper:
         self.no_of_captures = no_of_captures
         self.session = create_session()
         self.records = None
-        self.article_links = None
+        self.article_links = []
 
     def get_all_records(self) -> List[List[str]]:
         def random_choice(df):
@@ -852,7 +852,11 @@ class WSJScrapper:
         df = pd.DataFrame(all_links, columns=['url'])
         df['date'] = pd.to_datetime(df['url'].str.extract(r'(\d{8})')[0], format='%Y%m%d')
         df['article_url'] = df.url.apply(lambda x: x.rsplit('https://', 1)[-1])
+        pre = len(df.article_url.unique())
+        df = df[~df.article_url.isin(self.article_links)]
+        logger.info(f'Filtered out {pre - len(df.article_url.unique())} previously processed articles')
         df = df.groupby(['article_url']).url.apply(lambda x: x.tolist()).reset_index()
+        self.article_links.extend(list(set(df['article_url'].tolist())))
         all_links = df['url'].tolist()
         logger.info(f"Found {len(all_links)} distinct article links from between {self.start_date} and {self.end_date}")
         return all_links
@@ -864,7 +868,6 @@ class WSJScrapper:
 
         logger.info(f"Retrieved {len(records)} CDX records")
         article_links = self.get_all_article_links(records)
-        self.article_links = article_links
 
         if not article_links:
             logger.error(f"Could not retrieve any article links")
